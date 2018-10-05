@@ -1,61 +1,45 @@
 package com.mobilabsolutions.bdd.bddtryout;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.web.client.ResponseErrorHandler;
+import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 
 @SpringBootTest(classes = Application.class, webEnvironment = WebEnvironment.DEFINED_PORT)
 @ContextConfiguration
 public class ApplicationIntegrationTest {
 
-	static ResponseResults latestResponse = null;
-
-	@Autowired
 	protected RestTemplate restTemplate;
+	protected ResponseResult<Object> lastResponse;
 
-	void executeGet(String url) throws IOException {
-		final Map<String, String> headers = new HashMap<>();
-		headers.put("Accept", "application/json");
-		final HeaderSettingRequestCallback requestCallback = new HeaderSettingRequestCallback(headers);
-		final ResponseResultErrorHandler errorHandler = new ResponseResultErrorHandler();
-
-		restTemplate.setErrorHandler(errorHandler);
-		latestResponse = restTemplate.execute(url, HttpMethod.GET, requestCallback, response -> {
-			if (errorHandler.hadError) {
-				return (errorHandler.getResults());
-			} else {
-				return (new ResponseResults(response));
-			}
-		});
+	public ApplicationIntegrationTest() {
+		this.restTemplate = new RestTemplate();
+		this.restTemplate.setErrorHandler(new SilentErrorHandler());
 	}
 
-	private class ResponseResultErrorHandler implements ResponseErrorHandler {
-		private ResponseResults results = null;
-		private Boolean hadError = false;
-
-		private ResponseResults getResults() {
-			return results;
-		}
-
-		@Override
-		public boolean hasError(ClientHttpResponse response) throws IOException {
-			hadError = response.getRawStatusCode() >= 400;
-			return hadError;
-		}
-
+	public class SilentErrorHandler extends DefaultResponseErrorHandler {
 		@Override
 		public void handleError(ClientHttpResponse response) throws IOException {
-			results = new ResponseResults(response);
 		}
+	}
+
+	protected <T> void executeGet(String url, Class<T> responseType) {
+		ResponseEntity<T> response = restTemplate.getForEntity("http://localhost:8080" + url, responseType);
+		this.lastResponse = new ResponseResult<>(response.getBody(), response.getStatusCodeValue());
+	}
+
+	protected <T> void executePost(String url, Object request, Class<T> responseType) {
+		ResponseEntity<T> response = restTemplate.postForEntity("http://localhost:8080" + url, request, responseType);
+		this.lastResponse = new ResponseResult<>(response.getBody(), response.getStatusCodeValue());
+	}
+
+	protected void executeDelete(String url) {
+		restTemplate.delete("http://localhost:8080" + url);
 	}
 
 }
